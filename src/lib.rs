@@ -3,7 +3,7 @@
 //! that can contain any u64, occupying between 1 and 9 bytes
 //! and wasting one bit per byte in serialized form.
 //! ```
-//! use bitbuf::{BitBuf, BitBufMut};
+//! use bitbuf::{BitSlice, BitSliceMut, BitBufMut};
 //! use bitbuf_vlq::Vlq;
 //! let mut data = [0u8; 8];
 //!
@@ -11,7 +11,7 @@
 //! let val: u64 = 1389766487781;
 //!
 //! // Create a buffer handle to write into the array
-//! let mut buf = BitBufMut::new(&mut data);
+//! let mut buf = BitSliceMut::new(&mut data);
 //!
 //! // Create a variable-length quantity (from any Into<u64>)
 //! let vlq: Vlq = Vlq::from(val);
@@ -23,7 +23,7 @@
 //! assert_eq!(buf.len(), 48);
 //!
 //! // Create a buffer to read the data back out
-//! let mut buf = BitBuf::new(&mut data);
+//! let mut buf = BitSlice::new(&mut data);
 //!
 //! // Note the value is preserved
 //! assert_eq!(Vlq::read(&mut buf).unwrap(), val);
@@ -32,7 +32,7 @@
 //! let val: u64 = 78;
 //!
 //! // Create a new buffer handle to write into the array
-//! let mut buf = BitBufMut::new(&mut data);
+//! let mut buf = BitSliceMut::new(&mut data);
 //!
 //! //. Create a new variable-length quantity
 //! let vlq: Vlq = Vlq::from(val);
@@ -44,13 +44,13 @@
 //! assert_eq!(buf.len(), 8);
 //!
 //! // Create a buffer to read the data back out
-//! let mut buf = BitBuf::new(&mut data);
+//! let mut buf = BitSlice::new(&mut data);
 //!
 //! // Note the value is preserved
 //! assert_eq!(Vlq::read(&mut buf).unwrap(), val);
 //! ```
 
-use bitbuf::{BitBuf, BitBufMut, CopyError};
+use bitbuf::{BitBuf, BitBufMut, BitSliceMut, CopyError};
 use core::ops::Deref;
 
 fn encode_len(n: u64) -> u8 {
@@ -95,7 +95,7 @@ impl<T: Into<u64>> From<T> for Vlq {
     fn from(input: T) -> Self {
         let input = input.into();
         let mut encoded = [0u8; 9];
-        let mut buf = BitBufMut::new(&mut encoded);
+        let mut buf = BitSliceMut::new(&mut encoded);
         let len = encode_len(input);
         for _ in 0..len {
             buf.push(false).unwrap();
@@ -137,7 +137,7 @@ impl From<CopyError> for Error {
 }
 
 impl Vlq {
-    pub fn read<'a>(buf: &mut BitBuf<'a>) -> Result<u64, Error> {
+    pub fn read<B: BitBuf>(buf: &mut B) -> Result<u64, Error> {
         let mut len = 0usize;
         while let Some(item) = buf.pop() {
             if item {
@@ -173,13 +173,14 @@ impl Vlq {
 #[cfg(test)]
 mod test {
     use super::*;
+    use bitbuf::BitSlice;
 
     fn read_write(value: u64, bytes: usize) {
         // Create backing storage
         let mut data = vec![0u8; bytes];
 
         // Create a buffer handle for writing
-        let mut buf = BitBufMut::new(&mut data);
+        let mut buf = BitSliceMut::new(&mut data);
 
         // Create a vlq
         let vlq = Vlq::from(value);
@@ -193,7 +194,7 @@ mod test {
 
         // Read vlq to ensure value is preserved
         assert_eq!(
-            Vlq::read(&mut BitBuf::new(&data)).expect("reading vlq failed"),
+            Vlq::read(&mut BitSlice::new(&data)).expect("reading vlq failed"),
             value
         );
     }
